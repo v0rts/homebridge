@@ -26,6 +26,7 @@ import {
   uuid,
   VoidCallback,
   MDNSAdvertiser,
+  HAPLibraryVersion,
 } from "hap-nodejs";
 import {
   AccessoryIdentifier,
@@ -50,7 +51,7 @@ export interface BridgeConfiguration {
   name: string;
   username: MacAddress;
   pin: string; // format like "000-00-000"
-  advertiser: MDNSAdvertiser;
+  advertiser?: MDNSAdvertiser;
   port?: number;
   bind?: (InterfaceName | IPAddress) | (InterfaceName | IPAddress)[];
   setupID?: string[4];
@@ -151,7 +152,7 @@ export class BridgeService {
 
   // characteristic warning event has additional parameter originatorChain: string[] which is currently unused
   public static printCharacteristicWriteWarning(plugin: Plugin, accessory: Accessory, opts: CharacteristicWarningOpts, warning: CharacteristicWarning): void {
-    const wikiInfo = "See https://git.io/JtMGR for more info.";
+    const wikiInfo = "See https://homebridge.io/w/JtMGR for more info.";
     switch (warning.type) {
       case CharacteristicWarningType.SLOW_READ:
       case CharacteristicWarningType.SLOW_WRITE:
@@ -162,7 +163,7 @@ export class BridgeService {
       case CharacteristicWarningType.TIMEOUT_READ:
       case CharacteristicWarningType.TIMEOUT_WRITE:
         log.error(getLogPrefix(plugin.getPluginIdentifier()), "This plugin slows down Homebridge.", warning.message, wikiInfo);
-        break;   
+        break;
       case CharacteristicWarningType.WARN_MESSAGE:
         log.info(getLogPrefix(plugin.getPluginIdentifier()), `This plugin generated a warning from the characteristic '${warning.characteristic.displayName}':`, warning.message + ".", wikiInfo);
         break;
@@ -191,7 +192,7 @@ export class BridgeService {
     info.setCharacteristic(Characteristic.FirmwareRevision, getVersion());
 
     this.bridge.on(AccessoryEventTypes.LISTENING, (port: number) => {
-      log.info("Homebridge v%s (%s) is running on port %s.", getVersion(), bridgeConfig.name, port);
+      log.info("Homebridge v%s (HAP v%s) (%s) is running on port %s.", getVersion(), HAPLibraryVersion(), bridgeConfig.name, port);
     });
 
     // noinspection JSDeprecatedSymbols
@@ -210,6 +211,7 @@ export class BridgeService {
       publishInfo.setupID = bridgeConfig.setupID;
     }
 
+    log.debug("Publishing bridge accessory (name: %s, publishInfo: %o).", this.bridge.displayName, BridgeService.strippingPinCode(publishInfo));
     this.bridge.publish(publishInfo, this.allowInsecureAccess);
   }
 
@@ -439,7 +441,7 @@ export class BridgeService {
       });
 
       // noinspection JSDeprecatedSymbols
-      hapAccessory.publish({
+      const publishInfo: PublishInfo = {
         username: advertiseAddress,
         pincode: accessoryPin,
         category: accessory.category,
@@ -448,7 +450,10 @@ export class BridgeService {
         mdns: this.config.mdns, // this is deprecated and not used anymore
         addIdentifyingMaterial: true,
         advertiser: this.bridgeConfig.advertiser,
-      }, this.allowInsecureAccess);
+      };
+
+      log.debug("Publishing external accessory (name: %s, publishInfo: %o).", hapAccessory.displayName, BridgeService.strippingPinCode(publishInfo));
+      hapAccessory.publish(publishInfo, this.allowInsecureAccess);
     }
   }
 
@@ -523,7 +528,7 @@ export class BridgeService {
     return new Promise(resolve => {
       // warn the user if the static platform is blocking the startup of Homebridge for to long
       const loadDelayWarningInterval = setInterval(() => {
-        log.warn(getLogPrefix(plugin.getPluginIdentifier()), "This plugin is taking long time to load and preventing Homebridge from starting. See https://git.io/JtMGR for more info.");
+        log.warn(getLogPrefix(plugin.getPluginIdentifier()), "This plugin is taking long time to load and preventing Homebridge from starting. See https://homebridge.io/w/JtMGR for more info.");
       }, 20000);
 
       platformInstance.accessories(once((accessories: AccessoryPlugin[]) => {
@@ -566,5 +571,11 @@ export class BridgeService {
     this.api.signalShutdown();
   }
 
-
+  private static strippingPinCode(publishInfo: PublishInfo): PublishInfo {
+    const info = {
+      ...publishInfo,
+    };
+    info.pincode = "***-**-***";
+    return info;
+  }
 }

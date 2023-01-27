@@ -1,5 +1,91 @@
 # Change Log
 
+## v1.5.0 (2022-06-22)
+
+### Featured Changes
+
+* Add support for stopping / starting a child bridge via the Homebridge UI @oznu [#3139](https://github.com/homebridge/homebridge/pull/3139)
+
+### Other Changes
+
+* Add support for package.json exports field @ShogunPanda [#3016](https://github.com/homebridge/homebridge/pull/3016), [#3165](https://github.com/homebridge/homebridge/pull/3165)
+
+## v1.4.1 (2022-04-29)
+
+### Featured Changes
+
+* Upgraded HAP-NodeJS to [v0.10.2](https://github.com/homebridge/HAP-NodeJS/releases/tag/v0.10.2)
+    * Fix an issue with network interface family detection when running Node.js 18 @oznu [#947](https://github.com/homebridge/HAP-NodeJS/pull/947)
+    * Fixed memory leak with HomeKit DataStreams @Supereg [#943](https://github.com/homebridge/HAP-NodeJS/pull/943)
+* Strict plugin resolution option added to Homebridge plugin @oznu [#3117](https://github.com/homebridge/homebridge/pull/3117) 
+* Replace https://git.io URLs as the service is [being depreciated](https://github.blog/changelog/2022-04-25-git-io-deprecation/)
+
+### Bug Fixes
+
+This release upgrades various dependencies with bug fixes and security fixes.
+
+## v1.4.0 (2022-01-22)
+
+### Featured Changes
+
+- HomeKit Secure Video @Supereg [#3056](https://github.com/homebridge/homebridge/pull/3056)
+- New advertiser: Avahi/D-Bus API @adriancable
+
+### Bug Fixes
+
+- Fix ES Module loading with abolute path @seydx [#3070](https://github.com/homebridge/homebridge/pull/3070) 
+- Fix casing of generated inline docs @Supereg [#3066](https://github.com/homebridge/homebridge/pull/3066)
+
+## 1.3.9 (2021-12-29)
+
+### Bug Fixes
+
+- Fixed a crash occurring for any encrypted communication when running NodeJs 17 on linux based machines [#3046](https://github.com/homebridge/homebridge/issues/3046)
+
+
+## 1.3.8 (2021-10-22)
+
+### Featured Changes
+
+- PluginManager would abort plugin loading if one plugin encounters a loading error  [#3017](https://github.com/homebridge/homebridge/issues/3017)
+
+### Other Changes
+
+- Move to centrally managed Issue form templates and GitHub Action workflows [#3011](https://github.com/homebridge/homebridge/issues/3011)
+
+
+## 1.3.6 (2021-11-10)
+
+### Notable changes
+
+* Added support for ESM modules and async plugin initializers [#2915](https://github.com/homebridge/homebridge/issues/2915)
+* Upgraded HAP-NodeJS to [v0.9.7](https://github.com/homebridge/HAP-NodeJS/releases/tag/v0.9.7) providing bug fixes  [#3008](https://github.com/homebridge/homebridge/issues/3008)
+
+## v1.3.5 (2021-10-08)
+
+### Notable changes
+
+This version adds new services and characteristics introduced with iOS 15.
+
+* `AccessCode` and `NFCAccess` services and corresponding characteristics.
+* Services related to the support of Siri enabled HomeKit devices:
+    * The following services were newly added: `Assistant`, `SiriEndpoint`
+    * The following services received new optional characteristics: `Siri` and `SmartSpeaker`
+
+### Bug Fixes
+
+This release upgrades various dependencies with bug fixes and security fixes.
+
+This includes the `dns-packet` security vulnerability referenced under [CVE-2021-23386](https://github.com/advisories/GHSA-3wcq-x3mq-6r9p).
+Only users who use the `bonjour` mdns advertiser are impacted by this vulnerability.
+
+## v1.3.4 (2021-03-16)
+
+### Bug Fixes
+
+* Fixed a characteristic warning for Cameras or Video Doorbells, which might be emitted on startup under certain conditions.  
+   _This warning had no impact on the functionality of Cameras_.
+
 ## v1.3.3 (2021-03-10)
 
 ### Bug Fixes

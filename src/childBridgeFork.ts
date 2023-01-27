@@ -12,7 +12,7 @@ import { Plugin } from "./plugin";
 import { PluginManager } from "./pluginManager";
 import { Logger } from "./logger";
 import { User } from "./user";
-import { HAPStorage, MacAddress } from "hap-nodejs";
+import { AccessoryEventTypes, HAPStorage, MacAddress } from "hap-nodejs";
 import {
   ChildProcessMessageEventType,
   ChildProcessMessageEvent,
@@ -20,6 +20,7 @@ import {
   ChildProcessPortRequestEventData,
   ChildProcessPortAllocatedEventData,
   ChildProcessPluginLoadedEventData,
+  ChildBridgePairedStatusEventData,
 } from "./childBridgeService";
 import {
   AccessoryConfig,
@@ -60,7 +61,7 @@ export class ChildBridgeFork {
     }
   }
 
-  loadPlugin(data: ChildProcessLoadEventData): void {
+  async loadPlugin(data: ChildProcessLoadEventData): Promise<void> {
     // set data
     this.type = data.type;
     this.identifier = data.identifier;
@@ -100,9 +101,9 @@ export class ChildBridgeFork {
     this.externalPortService = new ChildBridgeExternalPortService(this);
 
     // load plugin
-    this.plugin = this.pluginManager.loadPlugin(data.pluginPath);
-    this.plugin.load();
-    this.pluginManager.initializePlugin(this.plugin, data.identifier);
+    this.plugin = await this.pluginManager.loadPlugin(data.pluginPath);
+    await this.plugin.load();
+    await this.pluginManager.initializePlugin(this.plugin, data.identifier);
 
     // change process title to include plugin name
     process.title = `homebridge: ${this.plugin.getPluginIdentifier()}`;
@@ -121,6 +122,21 @@ export class ChildBridgeFork {
       this.bridgeConfig,
       this.homebridgeConfig,
     );
+
+    // watch bridge events to check when server is online
+    this.bridgeService.bridge.on(AccessoryEventTypes.ADVERTISED, () => {
+      this.sendPairedStatusEvent();
+    });
+
+    // watch for the paired event to update the server status
+    this.bridgeService.bridge.on(AccessoryEventTypes.PAIRED, () => {
+      this.sendPairedStatusEvent();
+    });
+
+    // watch for the unpaired event to update the server status
+    this.bridgeService.bridge.on(AccessoryEventTypes.UNPAIRED, () => {
+      this.sendPairedStatusEvent();
+    });
 
     // load the cached accessories
     await this.bridgeService.loadCachedPlatformAccessoriesFromDisk();
@@ -209,6 +225,16 @@ export class ChildBridgeFork {
     if (callback) {
       callback(data.port);
     }
+  }
+
+  /**
+   * Sends the current pairing status of the child bridge to the parent process
+   */
+  public sendPairedStatusEvent() {
+    this.sendMessage<ChildBridgePairedStatusEventData>(ChildProcessMessageEventType.STATUS_UPDATE, {
+      paired: this.bridgeService?.bridge?._accessoryInfo?.paired() ?? null,
+      setupUri: this.bridgeService?.bridge?.setupURI() ?? null,
+    });
   }
 
   shutdown(): void {

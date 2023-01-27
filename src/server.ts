@@ -18,14 +18,14 @@ import {
   IpcOutgoingEvent,
   IpcService,
 } from "./ipcService";
-import { 
-  PluginManager, 
-  PluginManagerOptions, 
+import {
+  PluginManager,
+  PluginManagerOptions,
 } from "./pluginManager";
-import { 
-  BridgeService, 
-  BridgeConfiguration, 
-  HomebridgeConfig, 
+import {
+  BridgeService,
+  BridgeConfiguration,
+  HomebridgeConfig,
   BridgeOptions,
 } from "./bridgeService";
 import {
@@ -52,6 +52,7 @@ export interface HomebridgeOptions {
   debugModeEnabled?: boolean;
   forceColourLogging?: boolean;
   customStoragePath?: string;
+  strictPluginResolution?: boolean;
 }
 
 export const enum ServerStatus {
@@ -79,7 +80,7 @@ export class Server {
   private readonly externalPortService: ExternalPortService;
 
   private readonly config: HomebridgeConfig;
-  
+
   // used to keep track of child bridges
   private readonly childBridges: Map<MacAddress, ChildBridgeService> = new Map();
 
@@ -92,7 +93,7 @@ export class Server {
     this.config = Server.loadConfig();
 
     // object we feed to Plugins and BridgeService
-    this.api = new HomebridgeAPI(); 
+    this.api = new HomebridgeAPI();
     this.ipcService = new IpcService();
     this.externalPortService = new ExternalPortService(this.config.ports);
 
@@ -104,6 +105,7 @@ export class Server {
       activePlugins: this.config.plugins,
       disabledPlugins: this.config.disabledPlugins,
       customPluginPath: options.customPluginPath,
+      strictPluginResolution: options.strictPluginResolution,
     };
     this.pluginManager = new PluginManager(this.api, pluginManagerOptions);
 
@@ -126,19 +128,34 @@ export class Server {
     );
 
     // watch bridge events to check when server is online
-    this.bridgeService.bridge.on(AccessoryEventTypes.LISTENING, () => {
+    this.bridgeService.bridge.on(AccessoryEventTypes.ADVERTISED, () => {
       this.setServerStatus(ServerStatus.OK);
+    });
+
+    // watch for the paired event to update the server status
+    this.bridgeService.bridge.on(AccessoryEventTypes.PAIRED, () => {
+      this.setServerStatus(this.serverStatus);
+    });
+
+    // watch for the unpaired event to update the server status
+    this.bridgeService.bridge.on(AccessoryEventTypes.UNPAIRED, () => {
+      this.setServerStatus(this.serverStatus);
     });
   }
 
   /**
    * Set the current server status and update parent via IPC
-   * @param status 
+   * @param status
    */
   private setServerStatus(status: ServerStatus) {
     this.serverStatus = status;
     this.ipcService.sendMessage(IpcOutgoingEvent.SERVER_STATUS_UPDATE, {
       status: this.serverStatus,
+      paired: this.bridgeService?.bridge?._accessoryInfo?.paired() ?? null,
+      setupUri: this.bridgeService?.bridge?.setupURI() ?? null,
+      name: this.bridgeService?.bridge?.displayName || this.config.bridge.name,
+      username: this.config.bridge.username,
+      pin: this.config.bridge.pin,
     });
   }
 
@@ -153,7 +170,7 @@ export class Server {
     await this.bridgeService.loadCachedPlatformAccessoriesFromDisk();
 
     // initialize plugins
-    this.pluginManager.initializeInstalledPlugins();
+    await this.pluginManager.initializeInstalledPlugins();
 
     if (this.config.platforms.length > 0) {
       promises.push(...this.loadPlatforms());
@@ -195,7 +212,6 @@ export class Server {
       name: "Homebridge",
       username: "CC:22:3D:E3:CE:30",
       pin: "031-45-154",
-      advertiser: MDNSAdvertiser.BONJOUR,
     };
 
     if (!fs.existsSync(configPath)) {
@@ -242,18 +258,31 @@ export class Server {
 
     config.accessories = config.accessories || [];
     config.platforms = config.platforms || [];
+
+    if (!Array.isArray(config.accessories)) {
+      log.error("Value provided for accessories must be an array[]");
+      config.accessories = [];
+    }
+
+    if (!Array.isArray(config.platforms)) {
+      log.error("Value provided for platforms must be an array[]");
+      config.platforms = [];
+    }
+
     log.info("Loaded config.json with %s accessories and %s platforms.", config.accessories.length, config.platforms.length);
 
     if (config.bridge.advertiser) {
       if (![
         MDNSAdvertiser.BONJOUR,
         MDNSAdvertiser.CIAO,
+        MDNSAdvertiser.AVAHI,
+        MDNSAdvertiser.RESOLVED,
       ].includes(config.bridge.advertiser)) {
-        config.bridge.advertiser = MDNSAdvertiser.BONJOUR;
-        log.error(`Value provided in bridge.advertiser is not valid, reverting to "${MDNSAdvertiser.BONJOUR}".`);
+        config.bridge.advertiser = undefined;
+        log.error("Value provided in bridge.advertiser is not valid, reverting to platform default.");
       }
     } else {
-      config.bridge.advertiser = MDNSAdvertiser.BONJOUR;
+      config.bridge.advertiser = undefined;
     }
 
     // Warn existing Homebridge 1.3.0 beta users they need to swap to bridge.advertiser
@@ -382,6 +411,11 @@ export class Server {
       let plugin: Plugin;
       let constructor: PlatformPluginConstructor;
 
+      // do not load homebridge-config-ui-x when running in service mode
+      if (platformIdentifier === "config" && process.env.UIX_SERVICE_MODE === "1") {
+        return;
+      }
+
       try {
         plugin = this.pluginManager.getPluginForPlatform(platformIdentifier);
       } catch (error) {
@@ -421,7 +455,7 @@ export class Server {
         const childBridge = new ChildBridgeService(
           PluginType.PLATFORM,
           platformIdentifier,
-          plugin, 
+          plugin,
           platformConfig._bridge,
           this.config,
           this.options,
@@ -499,7 +533,23 @@ export class Server {
     this.ipcService.on(IpcIncomingEvent.RESTART_CHILD_BRIDGE, (username) => {
       if (typeof username === "string") {
         const childBridge = this.childBridges.get(username.toUpperCase());
-        childBridge?.restartBridge();
+        childBridge?.restartChildBridge();
+      }
+    });
+
+    // handle stop child bridge event
+    this.ipcService.on(IpcIncomingEvent.STOP_CHILD_BRIDGE, (username) => {
+      if (typeof username === "string") {
+        const childBridge = this.childBridges.get(username.toUpperCase());
+        childBridge?.stopChildBridge();
+      }
+    });
+
+    // handle start child bridge event
+    this.ipcService.on(IpcIncomingEvent.START_CHILD_BRIDGE, (username) => {
+      if (typeof username === "string") {
+        const childBridge = this.childBridges.get(username.toUpperCase());
+        childBridge?.startChildBridge();
       }
     });
 
