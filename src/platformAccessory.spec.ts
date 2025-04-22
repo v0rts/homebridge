@@ -1,4 +1,10 @@
-import { Service, Categories, Accessory, RemoteController, uuid } from "hap-nodejs";
+import {
+  Service,
+  Categories,
+  Accessory,
+  RemoteController,
+  uuid,
+} from "hap-nodejs";
 import { PlatformAccessory, SerializedPlatformAccessory } from "./platformAccessory";
 
 function createAccessory(name = "TestAccessory", category?: Categories): PlatformAccessory {
@@ -41,6 +47,15 @@ describe("PlatformAccessory", () => {
       expect(accessory.services.length).toBe(1);
     });
 
+  });
+
+  describe("PlatformAccessory.prototype.updateDisplayName",() => {
+    it("should mirror displayName correctly", function() {
+      const accessory = createAccessory("TestName");
+      accessory.updateDisplayName("NewTestName");
+      expect(accessory._associatedHAPAccessory.displayName).toBe(accessory.displayName);
+      expect(accessory.displayName).toBe("NewTestName");
+    });
   });
 
   describe("PlatformAccessory.prototype.addService", () => {

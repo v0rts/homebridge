@@ -1,9 +1,7 @@
-import path from "path";
 import assert from "assert";
+import path from "path";
 import { pathToFileURL } from "url";
 import { satisfies } from "semver";
-import getVersion from "./version";
-import { Logger } from "./logger";
 import {
   AccessoryIdentifier,
   AccessoryName,
@@ -17,7 +15,9 @@ import {
   PluginInitializer,
   PluginName,
 } from "./api";
+import { Logger } from "./logger";
 import { PackageJSON, PluginManager } from "./pluginManager";
+import getVersion from "./version";
 
 const log = Logger.internal;
 
@@ -39,7 +39,7 @@ export class Plugin {
   // ------------------ package.json content ------------------
   readonly version: string;
   private readonly main: string;
-  private loadContext?: { // used to store data for a limited time until the load method is called, will be reset afterwards
+  private loadContext?: { // used to store data for a limited time until the load method is called, will be reset afterward
     engines?: Record<string, string>;
     dependencies?: Record<string, string>;
   };
@@ -65,7 +65,7 @@ export class Plugin {
     if (packageJSON.exports) {
       // main entrypoint - https://nodejs.org/dist/latest-v14.x/docs/api/packages.html#packages_main_entry_point_export
       if (typeof packageJSON.exports === "string") {
-        this.main = packageJSON.exports;  
+        this.main = packageJSON.exports;
       } else { // subpath export - https://nodejs.org/dist/latest-v14.x/docs/api/packages.html#packages_subpath_exports
         // conditional exports - https://nodejs.org/dist/latest-v14.x/docs/api/packages.html#packages_conditional_exports
         const exports = packageJSON.exports.import || packageJSON.exports.require || packageJSON.exports.node || packageJSON.exports.default || packageJSON.exports["."];
@@ -88,7 +88,7 @@ export class Plugin {
       this.main = packageJSON.main || "./index.js";
     }
 
-    // check if it is a ESM module
+    // check if it is an ESM module
     this.isESM = this.main.endsWith(".mjs") || (this.main.endsWith(".js") && packageJSON.type === "module");
 
     // very temporary fix for first wave of plugins
@@ -224,6 +224,7 @@ major incompatibility issues and thus is considered bad practice. Please inform 
     // pathToFileURL(specifier).href to turn a path into a "file url"
     // see https://github.com/nodejs/node/issues/31710
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const pluginModules = this.isESM ? await _importDynamic(pathToFileURL(mainPath).href) : require(mainPath);
 
     if (typeof pluginModules === "function") {

@@ -30,8 +30,8 @@ export class IpcService extends EventEmitter {
    * Currently this will only listen for messages from a parent process.
    */
   public start(): void {
-    process.on("message", (message) => {
-      if (typeof message !== "object" || !message.id) {
+    process.on("message", (message: { id: string, data: never }) => {
+      if (!message || typeof message !== "object" || !message.id) {
         return;
       }
       this.emit(message.id, message.data);
@@ -40,7 +40,7 @@ export class IpcService extends EventEmitter {
 
   /**
    * Send a message to connected IPC clients.
-   * Currently this will only send messages if Homebridge was launched as a child_process.fork()
+   * Currently, this will only send messages if Homebridge was launched as a child_process.fork()
    * from another Node.js process (such as hb-service).
    */
   public sendMessage(id: IpcOutgoingEvent, data: unknown): void {

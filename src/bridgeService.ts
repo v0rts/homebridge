@@ -1,13 +1,3 @@
-import * as mac from "./util/mac";
-import getVersion from "./version";
-import { PluginManager } from "./pluginManager";
-import { StorageService } from "./storageService";
-import { Logger, Logging, getLogPrefix } from "./logger";
-import { Plugin } from "./plugin";
-import {
-  PlatformAccessory,
-  SerializedPlatformAccessory,
-} from "./platformAccessory";
 import {
   Accessory,
   AccessoryEventTypes,
@@ -15,7 +5,8 @@ import {
   Bridge,
   Categories,
   Characteristic,
-  CharacteristicEventTypes, CharacteristicWarning,
+  CharacteristicEventTypes,
+  CharacteristicWarning,
   CharacteristicWarningType,
   InterfaceName,
   IPAddress,
@@ -39,11 +30,15 @@ import {
   PluginIdentifier,
   StaticPlatformPlugin,
 } from "./api";
-import {
-  ExternalPortService,
-  ExternalPortsConfiguration,
-} from "./externalPortService";
+import { ExternalPortService, ExternalPortsConfiguration } from "./externalPortService";
+import { Logger, Logging, getLogPrefix } from "./logger";
+import { PlatformAccessory, SerializedPlatformAccessory } from "./platformAccessory";
+import { Plugin } from "./plugin";
+import { PluginManager } from "./pluginManager";
 import { HomebridgeOptions } from "./server";
+import { StorageService } from "./storageService";
+import * as mac from "./util/mac";
+import getVersion from "./version";
 
 const log = Logger.internal;
 
@@ -58,6 +53,12 @@ export interface BridgeConfiguration {
   manufacturer?: string;
   model?: string;
   disableIpc?: boolean;
+  firmwareRevision?: string;
+  serialNumber?: string;
+  env?: {
+    DEBUG?: string;
+    NODE_OPTIONS?: string;
+  };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,7 +92,7 @@ export interface HomebridgeConfig {
 
   /**
    * Array of disabled plugins.
-   * Unlike the plugins[] config which prevents plugins from being initialised at all, disabled plugins still have their alias loaded so
+   * Unlike the plugins[] config which prevents plugins from being initialised at all, disabled plugins still have their alias loaded, so
    * we can match config blocks of disabled plugins and show an appropriate message in the logs.
    */
   disabledPlugins?: PluginIdentifier[];
@@ -132,7 +133,7 @@ export class BridgeService {
 
     // Server is "secure by default", meaning it creates a top-level Bridge accessory that
     // will not allow unauthenticated requests. This matches the behavior of actual HomeKit
-    // accessories. However you can set this to true to allow all requests without authentication,
+    // accessories. However, you can set this to true to allow all requests without authentication,
     // which can be useful for easy hacking. Note that this will expose all functions of your
     // bridged accessories, like changing characteristics (i.e. flipping your lights on and off).
     this.allowInsecureAccess = this.bridgeOptions.insecureAccess || false;
@@ -146,7 +147,7 @@ export class BridgeService {
     this.bridge.on(AccessoryEventTypes.CHARACTERISTIC_WARNING, () => {
       // We register characteristic warning handlers on every bridged accessory (to have a reference to the plugin).
       // For Bridges the warnings will propagate to the main Bridge accessory, thus we need to silence them here.
-      // Other wise those would be printed twice (by us and HAP-NodeJS as it detects no handlers on the bridge).
+      // Otherwise, those would be printed twice (by us and HAP-NodeJS as it detects no handlers on the bridge).
     });
   }
 
@@ -188,11 +189,18 @@ export class BridgeService {
     const info = this.bridge.getService(Service.AccessoryInformation)!;
     info.setCharacteristic(Characteristic.Manufacturer, bridgeConfig.manufacturer || "homebridge.io");
     info.setCharacteristic(Characteristic.Model, bridgeConfig.model || "homebridge");
-    info.setCharacteristic(Characteristic.SerialNumber, bridgeConfig.username);
-    info.setCharacteristic(Characteristic.FirmwareRevision, getVersion());
+    info.setCharacteristic(Characteristic.SerialNumber, bridgeConfig.serialNumber || bridgeConfig.username);
+    info.setCharacteristic(Characteristic.FirmwareRevision, bridgeConfig.firmwareRevision || getVersion());
 
     this.bridge.on(AccessoryEventTypes.LISTENING, (port: number) => {
-      log.info("Homebridge v%s (HAP v%s) (%s) is running on port %s.", getVersion(), HAPLibraryVersion(), bridgeConfig.name, port);
+      log.success("Homebridge v%s (HAP v%s) (%s) is running on port %s.", getVersion(), HAPLibraryVersion(), bridgeConfig.name, port);
+
+      log.warn(
+        "\n\nNOTICE TO USERS AND PLUGIN DEVELOPERS"
+        + "\n> Homebridge 2.0 is on the way and brings some breaking changes to existing plugins.\n"
+        + "> Please visit the following link to learn more about the changes and how to prepare:\n"
+        + "> https://github.com/homebridge/homebridge/wiki/Updating-To-Homebridge-v2.0\n",
+      );
     });
 
     // noinspection JSDeprecatedSymbols
@@ -321,10 +329,8 @@ export class BridgeService {
           return false; // filter it from the list
         }
       } else {
-        // we set the current plugin version before configureAccessory is called, so the dev has the opportunity to override it
-        accessory.getService(Service.AccessoryInformation)!
-          .setCharacteristic(Characteristic.FirmwareRevision, plugin!.version);
-
+        // We set a placeholder for FirmwareRevision before configureAccessory is called so the plugin has the opportunity to override it.
+        accessory.getService(Service.AccessoryInformation)?.setCharacteristic(Characteristic.FirmwareRevision, "0");
         platformPlugins.configureAccessory(accessory);
       }
 
@@ -361,12 +367,6 @@ export class BridgeService {
 
       const plugin = this.pluginManager.getPlugin(accessory._associatedPlugin!);
       if (plugin) {
-        const informationService = accessory.getService(Service.AccessoryInformation)!;
-        if (informationService.getCharacteristic(Characteristic.FirmwareRevision).value === "0.0.0") {
-          // overwrite the default value with the actual plugin version
-          informationService.setCharacteristic(Characteristic.FirmwareRevision, plugin.version);
-        }
-
         const platforms = plugin.getActiveDynamicPlatform(accessory._associatedPlatform!);
 
         if (!platforms) {
@@ -385,8 +385,20 @@ export class BridgeService {
     this.saveCachedPlatformAccessoriesOnDisk();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   handleUpdatePlatformAccessories(accessories: PlatformAccessory[]): void {
+    if (!Array.isArray(accessories)) {
+      // This could be quite destructive if a non-array is passed in, so we'll just ignore it.
+      return;
+    }
+
+    const nonUpdatedPlugins = this.cachedPlatformAccessories.filter(
+      cachedPlatformAccessory => (
+        accessories.find(accessory => accessory.UUID === cachedPlatformAccessory._associatedHAPAccessory.UUID) === undefined
+      ),
+    );
+
+    this.cachedPlatformAccessories = [ ...nonUpdatedPlugins, ...accessories];
+
     // Update persisted accessories
     this.saveCachedPlatformAccessoriesOnDisk();
   }
@@ -423,12 +435,6 @@ export class BridgeService {
 
       const plugin = this.pluginManager.getPlugin(accessory._associatedPlugin!);
       if (plugin) {
-        const informationService = hapAccessory.getService(Service.AccessoryInformation)!;
-        if (informationService.getCharacteristic(Characteristic.FirmwareRevision).value === "0.0.0") {
-          // overwrite the default value with the actual plugin version
-          informationService.setCharacteristic(Characteristic.FirmwareRevision, plugin.version);
-        }
-
         hapAccessory.on(AccessoryEventTypes.CHARACTERISTIC_WARNING, BridgeService.printCharacteristicWriteWarning.bind(this, plugin, hapAccessory, { ignoreSlow: true }));
       } else if (PluginManager.isQualifiedPluginIdentifier(accessory._associatedPlugin!)) {
         // we did already complain in api.ts if it wasn't a qualified name
@@ -436,7 +442,7 @@ export class BridgeService {
       }
 
       hapAccessory.on(AccessoryEventTypes.LISTENING, (port: number) => {
-        log.info("%s is running on port %s.", hapAccessory.displayName, port);
+        log.success("%s is running on port %s.", hapAccessory.displayName, port);
         log.info("Please add [%s] manually in Home app. Setup Code: %s", hapAccessory.displayName, accessoryPin);
       });
 
@@ -498,7 +504,7 @@ export class BridgeService {
         if (service instanceof Service.AccessoryInformation) {
           service.setCharacteristic(Characteristic.Name, displayName); // ensure display name is set
           // ensure the plugin has not hooked already some listeners (some weird ones do).
-          // Otherwise they would override our identify listener registered by the HAP-NodeJS accessory
+          // Otherwise, they would override our identify listener registered by the HAP-NodeJS accessory
           service.getCharacteristic(Characteristic.Identify).removeAllListeners(CharacteristicEventTypes.SET);
 
           // pull out any values and listeners (get and set) you may have defined
@@ -507,11 +513,6 @@ export class BridgeService {
           accessory.addService(service);
         }
       });
-
-      if (informationService.getCharacteristic(Characteristic.FirmwareRevision).value === "0.0.0") {
-        // overwrite the default value with the actual plugin version
-        informationService.setCharacteristic(Characteristic.FirmwareRevision, plugin.version);
-      }
 
       accessory.on(AccessoryEventTypes.CHARACTERISTIC_WARNING, BridgeService.printCharacteristicWriteWarning.bind(this, plugin, accessory, {}));
 

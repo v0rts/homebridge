@@ -1,33 +1,7 @@
 import fs from "fs";
 import chalk from "chalk";
+import { AccessoryEventTypes, MacAddress, MDNSAdvertiser } from "hap-nodejs";
 import qrcode from "qrcode-terminal";
-
-import * as mac from "./util/mac";
-import { Logger } from "./logger";
-import { User } from "./user";
-import { Plugin } from "./plugin";
-import { ChildBridgeService } from "./childBridgeService";
-import { ExternalPortService } from "./externalPortService";
-import {
-  AccessoryEventTypes,
-  MacAddress,
-  MDNSAdvertiser,
-} from "hap-nodejs";
-import {
-  IpcIncomingEvent,
-  IpcOutgoingEvent,
-  IpcService,
-} from "./ipcService";
-import {
-  PluginManager,
-  PluginManagerOptions,
-} from "./pluginManager";
-import {
-  BridgeService,
-  BridgeConfiguration,
-  HomebridgeConfig,
-  BridgeOptions,
-} from "./bridgeService";
 import {
   AccessoryIdentifier,
   AccessoryName,
@@ -40,6 +14,20 @@ import {
   PlatformPluginConstructor,
   PluginType,
 } from "./api";
+import {
+  BridgeService,
+  BridgeConfiguration,
+  HomebridgeConfig,
+  BridgeOptions,
+} from "./bridgeService";
+import { ChildBridgeService } from "./childBridgeService";
+import { ExternalPortService } from "./externalPortService";
+import { IpcIncomingEvent, IpcOutgoingEvent, IpcService } from "./ipcService";
+import { Logger } from "./logger";
+import { Plugin } from "./plugin";
+import { PluginManager, PluginManagerOptions } from "./pluginManager";
+import { User } from "./user";
+import * as mac from "./util/mac";
 
 const log = Logger.internal;
 
@@ -228,7 +216,7 @@ export class Server {
       config = JSON.parse(fs.readFileSync(configPath, { encoding: "utf8" }));
     } catch (err) {
       log.error("There was a problem reading your config.json file.");
-      log.error("Please try pasting your config.json file here to validate it: http://jsonlint.com");
+      log.error("Please try pasting your config.json file here to validate it: https://jsonlint.com");
       log.error("");
       throw err;
     }

@@ -8,11 +8,12 @@ import {
   ControllerConstructor,
   LegacyCameraSource,
   SerializedAccessory,
-  Service, VoidCallback,
+  Service,
+  VoidCallback,
   WithUUID,
 } from "hap-nodejs";
-import { PlatformName, PluginIdentifier, PluginName } from "./api";
 import { ConstructorArgs } from "hap-nodejs/dist/types";
+import { PlatformName, PluginIdentifier, PluginName } from "./api";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type UnknownContext = Record<string, any>;
@@ -89,6 +90,13 @@ export class PlatformAccessory<T extends UnknownContext = UnknownContext>  exten
     });
   }
 
+  public updateDisplayName(name: string): void {
+    if (name) {
+      this.displayName = name;
+      this._associatedHAPAccessory.displayName = name;
+    }
+  }
+
   public addService(service: Service): Service;
   public addService<S extends typeof Service>(serviceConstructor: S, ...constructorArgs: ConstructorArgs<S>): Service;
   public addService(service: Service | typeof Service, ...constructorArgs: any[]): Service { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -160,6 +168,7 @@ export class PlatformAccessory<T extends UnknownContext = UnknownContext>  exten
 
   // private
   static serialize(accessory: PlatformAccessory): SerializedPlatformAccessory {
+    accessory._associatedHAPAccessory.displayName = accessory.displayName;
     return {
       plugin: accessory._associatedPlugin!,
       platform: accessory._associatedPlatform!,

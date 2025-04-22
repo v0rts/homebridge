@@ -1,13 +1,13 @@
 import { EventEmitter } from "events";
 import * as hapNodeJs from "hap-nodejs";
 import { Controller, Service } from "hap-nodejs";
-import getVersion from "./version";
-import { PlatformAccessory } from "./platformAccessory";
-import { User } from "./user";
-import { Logger, Logging } from "./logger";
-import { AccessoryConfig, PlatformConfig } from "./bridgeService";
-import { PluginManager } from "./pluginManager";
 import semver from "semver";
+import { AccessoryConfig, PlatformConfig } from "./bridgeService";
+import { Logger, Logging } from "./logger";
+import { PlatformAccessory } from "./platformAccessory";
+import { PluginManager } from "./pluginManager";
+import { User } from "./user";
+import getVersion from "./version";
 
 const log = Logger.internal;
 
@@ -52,7 +52,7 @@ export interface AccessoryPluginConstructor {
 export interface AccessoryPlugin {
 
   /**
-   * Optional method which will be called if a 'identify' of a Accessory is requested by HomeKit.
+   * Optional method which will be called if a 'identify' of an Accessory is requested by HomeKit.
    */
   identify?(): void;
 
@@ -70,10 +70,10 @@ export interface AccessoryPlugin {
    *
    * This includes controllers like the RemoteController or the CameraController.
    * Any necessary controller specific setup should have been done when returning the array.
-   * In most cases the plugin will only return a array of the size 1.
+   * In most cases the plugin will only return an array of the size 1.
    *
    * In the case that the Plugin does not add any additional services (returned by {@link getServices}) the
-   * method {@link getServices} must defined in any way and should just return an empty array.
+   * method {@link getServices} must be defined in any way and should just return an empty array.
    *
    * @returns {Controller[]} controllers - returned controllers will be configured for the Accessory
    */
@@ -81,11 +81,11 @@ export interface AccessoryPlugin {
 
 }
 
-export interface PlatformPluginConstructor {
-  new(logger: Logging, config: PlatformConfig, api: API): DynamicPlatformPlugin | StaticPlatformPlugin | IndependentPlatformPlugin;
+export interface PlatformPluginConstructor<Config extends PlatformConfig = PlatformConfig> {
+  new(logger: Logging, config: Config, api: API): DynamicPlatformPlugin | StaticPlatformPlugin | IndependentPlatformPlugin;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface PlatformPlugin {} // not exported to the public in index.ts
 
 /**
@@ -130,7 +130,7 @@ export interface StaticPlatformPlugin extends PlatformPlugin {
  * It should also be used when the platform doesn't intend to expose any accessories at all, like plugins
  * providing a UI for homebridge.
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface IndependentPlatformPlugin extends PlatformPlugin {
   // does not expose any methods
 }
@@ -143,7 +143,7 @@ export const enum APIEvent {
    */
   DID_FINISH_LAUNCHING = "didFinishLaunching",
   /**
-   * This event is fired when homebridge got shutdown. This could be a regular shutdown or a unexpected crash.
+   * This event is fired when homebridge gets shutdown. This could be a regular shutdown or an unexpected crash.
    * At this stage all Accessories are already unpublished and all PlatformAccessories are already saved to disk!
    */
   SHUTDOWN = "shutdown",
@@ -197,8 +197,8 @@ export interface API {
   registerAccessory(accessoryName: AccessoryName, constructor: AccessoryPluginConstructor): void;
   registerAccessory(pluginIdentifier: PluginIdentifier, accessoryName: AccessoryName, constructor: AccessoryPluginConstructor): void;
 
-  registerPlatform(platformName: PlatformName, constructor: PlatformPluginConstructor): void;
-  registerPlatform(pluginIdentifier: PluginIdentifier, platformName: PlatformName, constructor: PlatformPluginConstructor): void;
+  registerPlatform<Config extends PlatformConfig>(platformName: PlatformName, constructor: PlatformPluginConstructor<Config>): void;
+  registerPlatform<Config extends PlatformConfig>(pluginIdentifier: PluginIdentifier, platformName: PlatformName, constructor: PlatformPluginConstructor<Config>): void;
   registerPlatformAccessories(pluginIdentifier: PluginIdentifier, platformName: PlatformName, accessories: PlatformAccessory[]): void;
   updatePlatformAccessories(accessories: PlatformAccessory[]): void;
   unregisterPlatformAccessories(pluginIdentifier: PluginIdentifier, platformName: PlatformName, accessories: PlatformAccessory[]): void;
