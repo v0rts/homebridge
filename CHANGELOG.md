@@ -2,6 +2,29 @@
 
 All notable changes to `homebridge` will be documented in this file. This project tries to adhere to [Semantic Versioning](http://semver.org/).
 
+## v1.11.0 (2025-07-13)
+
+### Changes
+
+- return port in `childBridgeStatusUpdate` event response
+- update dependencies, including `jest` to `v30`
+- regenerate docs after `typedoc` update
+
+### Homebridge Dependencies
+
+- `hap-nodejs` @ `v0.13.1`
+
+## v1.10.0 (2025-06-07)
+
+### Changed
+
+- updated dependencies including `hap-nodejs` to `v0.13.1`
+- move v2.0 notice to show just once + node notice
+
+### Homebridge Dependencies
+
+- `hap-nodejs` @ `v0.13.1`
+
 ## v1.9.0 (2025-02-11)
 
 ### Changed
