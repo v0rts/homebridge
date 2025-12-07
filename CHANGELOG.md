@@ -2,6 +2,17 @@
 
 All notable changes to `homebridge` will be documented in this file. This project tries to adhere to [Semantic Versioning](http://semver.org/).
 
+## v1.11.1 (2025-10-29)
+
+### Changed
+
+- updated dependencies
+- add node 24 to node engines in `package.json`
+
+### Homebridge Dependencies
+
+- `hap-nodejs` @ `v0.14.0`
+
 ## v1.11.0 (2025-07-13)
 
 ### Changes
